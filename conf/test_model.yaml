@@ -21,5 +21,5 @@ model:
 
 
 mlflow:
-  experiment_name: ablation_apres_optuna_final_jdse
+  experiment_name: optuna_test
   run_name: null

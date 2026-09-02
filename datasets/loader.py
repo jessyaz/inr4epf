@@ -39,7 +39,7 @@ def load_market_dataloader(
     print(file_path)
 
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"Le fichier pour le marché {market} n'existe pas dans {processed_dir}.")
+        raise FileNotFoundError(f"Error: {market} not exist in {processed_dir}.")
 
     with open(file_path, "rb") as f:
         data = pickle.load(f)
@@ -48,6 +48,12 @@ def load_market_dataloader(
         data['X_exogenous_train'],
         data['Y_target_train'],
         missing_rate=missing_rate,
+        seed=seed
+    )
+    val_dataset = EPFDataset(
+        data['X_exogenous_val'],
+        data['Y_target_val'],
+        missing_rate=0.0,
         seed=seed
     )
     test_dataset = EPFDataset(
@@ -66,10 +72,15 @@ def load_market_dataloader(
         shuffle=True,
         generator=g_loader
     )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False
+    )
     test_loader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False
     )
 
-    return train_loader, test_loader, data['scaler']
+    return train_loader, val_loader, test_loader, data['scaler']

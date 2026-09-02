@@ -14,12 +14,12 @@ dependencies = [
     "tensorflow==2.16.2; sys_platform == 'darwin' and platform_machine == 'x86_64'",
     "tensorflow; sys_platform != 'darwin' or platform_machine != 'x86_64'",
     "mlflow>=1.27.0",
-
     #"mlflow==3.0.0",
-
     "setuptools<74",
     "dotenv>=0.9.9",
     "boto3>=1.43.83",
+    "hydra-optuna-sweeper>=1.2.0",
+    "optuna>=2.10.1",
 ]
 
 [tool.uv.sources]

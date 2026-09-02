@@ -2,25 +2,14 @@ import torch
 from tqdm import tqdm
 import numpy as np
 import matplotlib.pyplot as plt
-
+from utils.metrics import compute_metrics
 
 def test(model, loader, scaler, device, logger):
     model.eval()
 
     lookback = model.cfg.lookback
 
-    loss_dict = {
-        'RMSE_future': 0.0,
-        'RMSE_past': 0.0,
-        'MAE_future': 0.0,
-        'MAE_past': 0.0,
-        'MAPE_future': 0.0,
-        'MAPE_past': 0.0,
-        'SMAPE_future': 0.0,
-        'SMAPE_past': 0.0,
-        'rMAE_future': 0.0,
-
-    }
+    loss_dict = {'MSE': 0.0, 'RMSE': 0.0, 'MAE': 0.0, 'MAPE': 0.0, 'SMAPE': 0.0, 'rMAE': 0.0}
 
     n = 0
     all_pred_f, all_target_f = [], []
@@ -68,21 +57,8 @@ def test(model, loader, scaler, device, logger):
     targets_p = np.concatenate(all_target_p, axis=0)
 
 
-    def compute_metrics(p, t, naive_ref):
-        rmse = np.sqrt(np.mean((p - t) ** 2))
-        mae = np.mean(np.abs(p - t))
-        mape = np.mean(np.abs((t - p) / (np.abs(t) + 1e-8))) * 100
-        smape = (
-                np.mean(2.0 * np.abs(p - t) / (np.abs(p) + np.abs(t) + 1e-8)) * 100
-        )
-        naive_mae = np.mean(np.abs(t - naive_ref))
-        rmae = mae / (naive_mae + 1e-8)
-        return rmse, mae, mape, smape, rmae
-
-
     rf, maf, mapf, smf, rmaef = compute_metrics(preds_f, targets_f, naive_ref=targets_p)
     rp, map_, mapp, smp, _ = compute_metrics(preds_p, targets_p, naive_ref=targets_p)
-
 
     err = ((preds_f - targets_f) ** 2).mean(axis=(1, 2))
     ids = np.argsort(err)
@@ -103,17 +79,13 @@ def test(model, loader, scaler, device, logger):
     plt.close(fig)
 
 
-    loss_dict['RMSE_future'] = rf
-    loss_dict['MAE_future'] = maf
-    loss_dict['MAPE_future'] = mapf
-    loss_dict['SMAPE_future'] = smf
-    loss_dict['rMAE_future'] = rmaef
-
-    loss_dict['RMSE_past'] = rp
-    loss_dict['MAE_past'] = map_
-    loss_dict['MAPE_past'] = mapp
-    loss_dict['SMAPE_past'] = smp
+    loss_dict['MSE'] = float(np.mean((preds_f - targets_f) ** 2))
+    loss_dict['RMSE'] = rf
+    loss_dict['MAE'] = maf
+    loss_dict['MAPE'] = mapf
+    loss_dict['SMAPE'] = smf
+    loss_dict['rMAE'] = rmaef
 
     logger.log_metrics(loss_dict, epoch=0, prefix="test")
 
-    return {"loss": loss_dict}
+    return {"test_loss": loss_dict}

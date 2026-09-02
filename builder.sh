@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EPFTOOLBOX_REPO="https://github.com/jeslago/epftoolbox.git"
+### BEFORE PROD
+#EPFTOOLBOX_REPO="https://github.com/jeslago/epftoolbox.git"
+
+### FOR DEV
+EPFTOOLBOX_REPO="git@github.com:jeslago/epftoolbox.git"
+
 LIB_DIR="lib/epftoolbox"
 
 echo "[1/4] dirs"

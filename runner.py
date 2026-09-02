@@ -10,7 +10,6 @@ import torch
 from utils.mlflow_logger import MLflowLogger
 from datasets.loader import load_market_dataloader
 from utils.trainer import train as trainer
-from utils.valider import validate as valider
 from utils.tester import test as tester
 
 from models.test_model import Model as test_model
@@ -59,7 +58,7 @@ def main(cfg: DictConfig):
     except:
         raise ValueError(f"Dataset error : '{cfg.dataset}'")
 
-    train_loader, test_loader, scaler = load_market_dataloader(cfg.dataset.name, batch_size=cfg.dataset.batch_size, missing_rate=cfg.dataset.missing_rate, seed=cfg.seed)
+    train_loader, val_loader, test_loader, scaler = load_market_dataloader(cfg.dataset.name, batch_size=cfg.dataset.batch_size, missing_rate=cfg.dataset.missing_rate, seed=cfg.seed)
     for x, y in train_loader:
         print('Shape X_exog:', x.shape)
         print('Shape Y_target:', y.shape)
@@ -68,16 +67,25 @@ def main(cfg: DictConfig):
     model = instantiate_model(cfg).to(device)
 
     with MLflowLogger(cfg) as logger:
-        print("Entraînement en cours...")
+
+        print("Training ...")
         optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.lr)
-        loss_dict = trainer(model, train_loader, optimizer, device, logger)
-        print(f"Finish : {loss_dict}")
+
+        loaders = {'train_loader':train_loader ,'val_loader':val_loader}
+        loss_dict = trainer(model, loaders, optimizer, device, logger)
+
+        print(f"Training finish with : {loss_dict}")
         torch.save(model.state_dict(), run_dir / "model.pth")
         logger.log_checkpoint(str(run_dir / "model.pth"))
+
         print("test en cours...")
         loss_dict_test = tester(model, test_loader, scaler, device, logger)
+
         print(f"Finish : {loss_dict_test}")
+
         logger.tester_flag = True
+
+    return loss_dict["val_loss"]["MAE"]
 
 
 if __name__ == "__main__":
