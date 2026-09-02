@@ -1,0 +1,33 @@
+hydra:
+  job:
+    chdir: false
+
+registry: ???
+run_dir : null
+
+dataset:
+  name: NP #FR et autres
+  batch_size: 32
+  missing_rate: 0.1
+
+seed: 42
+device: auto
+
+model_uid: null
+
+model:
+  name: "lstm-cell"
+  lr: 0.001
+  num_epoch : 50
+  lookback: 24          # nb de pas de temps passés (encoder)
+  horizon: 24           # nb de pas de temps à prédire (decoder)
+  exog_dim: 2           # features exogènes X, connues sur passé + futur
+  target_dim: 1         # dimension de Y (série à prédire, scalaire par pas)
+  input_dim: 3          # encoder: exog_dim + target_dim (X passé concaténé à Y passé)
+  output_dim: 1         # = target_dim, ce que le decoder doit produire
+  hidden_dim: 64
+  teacher_forcing: 0.5
+
+mlflow:
+  experiment_name: icassp-dev
+  run_name: null

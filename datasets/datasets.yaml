@@ -1,0 +1,10 @@
+data:
+  data_dir: "./data"
+  markets:
+    - PJM
+    - NP
+    - BE
+    - FR
+    - DE
+  normalize_method: "Median"
+  window_duration_hours: 48 #hxx&
