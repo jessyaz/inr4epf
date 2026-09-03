@@ -20,6 +20,8 @@ else
     git clone "${EPFTOOLBOX_REPO}" "${LIB_DIR}"
 fi
 
+### BEFORE PROD
+# Probleme probablement à ce niveau : --editable reer un workspace qui ne devrait pas exister
 echo "[3/4] install"
 if command -v uv &> /dev/null; then
     uv add --editable "${LIB_DIR}"

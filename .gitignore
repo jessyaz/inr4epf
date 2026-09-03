@@ -1,5 +1,6 @@
 # --- Bibliothèque externe (clonée par build.sh, jamais vendorisée) ---
 lib/epftoolbox/
+models/git-src/
 
 # --- Données brutes et générées (régénérables, pas versionnées) ---
 data/*.csv
@@ -12,6 +13,7 @@ datasets/processed/*.pkl
 outputs/
 runs/
 mlruns/
+optuna_studies/
 *.log
 
 # --- Python ---
