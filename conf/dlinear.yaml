@@ -1,0 +1,38 @@
+hydra:
+  job:
+    chdir: false
+
+registry: ???
+run_dir : null
+
+dataset:
+  name: NP #FR et autres
+  batch_size: 32
+  missing_rate: 0.1
+
+seed: 42
+device: auto
+
+model_uid: null
+
+model:
+  name: "dlinear"
+  backbone_name: "DLinear"   # doit matcher exactement models/DLinear.py dans le repo vendored
+  lr: 0.0001
+  num_epoch : 50
+  lookback: 168              # aucun script officiel EPF pour DLinear -- aligne sur TimeXer par coherence
+  horizon: 24
+  exog_dim: 2
+  enc_in: 3                  # exog_dim + 1 (Price inclus, target en derniere colonne)
+  d_model: 512                # non utilise par DLinear (pas d'embedding), garde pour compat interface generique
+  d_ff: 2048                  # idem, sans effet reel sur DLinear
+  e_layers: 1                 # sans effet reel sur DLinear (pas de couches encoder)
+  dropout: 0.1                # sans effet reel sur DLinear (pas de dropout dans l'archi)
+  activation: "gelu"          # sans effet reel sur DLinear
+  moving_avg: 25              # UTILISE : fenetre de la moving average pour series_decomp (defaut papier)
+    # individual: false         # NON PRIS EN COMPTE par l'adaptateur generique actuel (limitation connue,
+  # DLinear le lit comme kwarg constructeur separe, pas depuis configs)
+
+mlflow:
+  experiment_name: icassp-dev
+  run_name: null

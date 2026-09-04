@@ -1,6 +1,6 @@
 # --- Bibliothèque externe (clonée par build.sh, jamais vendorisée) ---
 lib/epftoolbox/
-models/git-src/
+models/git_src/
 
 # --- Données brutes et générées (régénérables, pas versionnées) ---
 data/*.csv
@@ -29,6 +29,8 @@ dist/
 .venv/
 venv/
 env/
+
+
 
 # --- IDE ---
 .idea/

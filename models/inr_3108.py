@@ -20,21 +20,21 @@ class Model(nn.Module):
 
 
     def forward(self, exog_past, y_past, exog_future, y_future=None, teacher_forcing=None):
-
-        return pred_future, pred_past
+        pred_future = 0
+        return pred_future
 
     def forward_step(self, batch, device, debug=False):
 
-        X_exog, Y_target = batch
-        X_exog, Y_target = X_exog.to(device), Y_target.to(device)
+        X_exog, y_target = batch
+        X_exog, y_target = X_exog.to(device), y_target.to(device)
 
         lookback = self.cfg.lookback
 
         exog_past, exog_future = X_exog[:, :lookback], X_exog[:, lookback:]
-        y_past, y_future = Y_target[:, :lookback], Y_target[:, lookback:].unsqueeze(-1)
+        y_past, y_future = y_target[:, :lookback], y_target[:, lookback:].unsqueeze(-1)
 
 
 
-        pred_future, pred_past = self(exog_past, y_past, exog_future, y_future=y_future)
+        pred_future = self(exog_past, y_past, exog_future, y_future=y_future)
 
-        return pred_future, pred_past, Y_target
+        return pred_future, y_target

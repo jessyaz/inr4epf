@@ -1,4 +1,4 @@
-from utils.metrics import compute_metrics
+from utils.metrics import compute_metrics, get_naive_reference
 
 def validate(model, loader, device):
 
@@ -7,14 +7,15 @@ def validate(model, loader, device):
     loss_dict = {'MSE': 0.0, 'RMSE': 0.0, 'MAE': 0.0, 'rMAE': 0.0}
 
     lookback = model.cfg.lookback
+    horizon  = model.cfg.horizon
 
     n = 0
     for batch_idx, batch in enumerate(loader):
         n += 1
 
-        pred_future, pred_past, Y_target = model.forward_step(batch, device)
-        target_future = Y_target[:, lookback:, ...].unsqueeze(-1)
-        target_past = Y_target[:, :lookback, ...].unsqueeze(-1)
+        pred_future, y_target = model.forward_step(batch, device)
+        target_future = y_target[:, lookback:, ...].unsqueeze(-1)
+        target_past = get_naive_reference(y_target, lookback, horizon, mode="naive1").unsqueeze(-1) #y_target[:, :lookback, ...].unsqueeze(-1)
 
         loss = ((pred_future - target_future) ** 2).mean()
 

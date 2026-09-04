@@ -16,12 +16,25 @@ from models.test_model import Model as test_model
 from models.lstm_3008 import Model as lstm_3008
 from models.naif.naive_model import Model as naive_model
 
+#Git models
+from models.git_interfaces.epf_transformer import Model as epf_transformer
+from models.git_interfaces.timexer_interface import Model as timexer
+
+from models.git_interfaces.timeseries_lib_interface import Model as timeseries_lib
+
 
 
 MODEL_REGISTRY = {
     "test_model": test_model,
     "lstm_3008":lstm_3008,
     "naive_model": naive_model,
+    "epf_transformer": epf_transformer,
+    "timexer": timexer,
+
+
+    "patchtst": timeseries_lib,
+    "dlinear": timeseries_lib,
+    "itransformer": timeseries_lib,
 }
 
 
