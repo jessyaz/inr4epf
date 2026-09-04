@@ -20,37 +20,28 @@ def train(model, loaders, optimizer, device, logger):
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1}")):
             n += 1
 
-            pred_future, pred_past, Y_target = model.forward_step(batch, device)
-            target_past, target_future = Y_target[:, :lookback, ...].unsqueeze(-1), Y_target[:, lookback:, ...].unsqueeze(-1)
+            pred_future, y_target = model.forward_step(batch, device)
+
+            target_past          = y_target[:, :lookback, ...].unsqueeze(-1)
+            target_future        = y_target[:, lookback:, ...].unsqueeze(-1)
 
             loss_future = ((pred_future - target_future) ** 2).mean()
-            loss_past = ((pred_past - target_past) ** 2).mean()
 
-            loss = loss_future # + loss_past
+            loss = loss_future
 
             if loss.requires_grad:
                 optimizer.zero_grad(); loss.backward(); optimizer.step()
 
             loss_dict['MSE'] += loss.item()
 
-            # rmse, mae, mape, smape, rmae = compute_metrics(pred_future.detach().cpu().numpy(), target_future.detach().cpu().numpy(), naive_ref=target_past.detach().cpu().numpy())
-            #loss_dict['RMSE'] += rmse
-            #loss_dict['MAE'] += mae
-            #loss_dict['MAPE'] += mape
-            #loss_dict['SMAPE'] += smape
-            #loss_dict['rMAE'] += rmae
-
-
             if batch_idx == 5:
                 fig, axes = plt.subplots(2, 3, figsize=(15, 8))
                 axes = axes.flatten()
 
                 for i in range(6):
-                    full_pred = torch.cat([pred_past[i].detach().cpu(), pred_future[i].detach().cpu()], dim=0)
-                    full_target = Y_target[i].detach().cpu()
 
-                    axes[i].plot(full_pred.squeeze(), label="Pred")
-                    axes[i].plot(full_target.squeeze(), label="Target")
+                    axes[i].plot(pred_future[i].detach().cpu().squeeze(), label="Pred")
+                    axes[i].plot(target_future[i].detach().cpu().squeeze(), label="Target")
                     axes[i].axvline(x=lookback, color='r', linestyle='--')
                     axes[i].set_title(f"Batch Sample {i}")
                     axes[i].legend()
