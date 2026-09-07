@@ -13,11 +13,22 @@ def validate(model, loader, device):
     for batch_idx, batch in enumerate(loader):
         n += 1
 
-        pred_future, y_target = model.forward_step(batch, device)
+        pred_future = model.forward_step(batch, device)
+
+        y_target = batch["y_target"].to(device)
+        mask_future = batch["mask"][:, lookback:, ...].unsqueeze(-1).to(device)
+
         target_future = y_target[:, lookback:, ...].unsqueeze(-1)
         target_past = get_naive_reference(y_target, lookback, horizon, mode="naive1").unsqueeze(-1) #y_target[:, :lookback, ...].unsqueeze(-1)
 
+        target_future = batch["y_target_no_mask"][:, lookback:, ...].to(device).unsqueeze(-1)
+
+        mask_future_expanded = mask_future.unsqueeze(-1).float()
+
         loss = ((pred_future - target_future) ** 2).mean()
+
+        #squared_error = (pred_future - target_future) ** 2
+        #loss = (squared_error * mask_future_expanded).sum() / mask_future_expanded.sum().clamp(min=1.0)
 
         loss_dict['MSE'] += loss.item()
         rmse, mae, _, _, rmae = compute_metrics(pred_future.detach().cpu().numpy(), target_future.detach().cpu().numpy(), naive_ref=target_past.detach().cpu().numpy())

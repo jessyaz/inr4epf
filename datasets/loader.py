@@ -8,24 +8,35 @@ class EPFDataset(Dataset):
     def __init__(self, X_exog, y_target, missing_rate=0.0, seed=42):
         self.X_exog = torch.tensor(X_exog, dtype=torch.float32)
         self.y_target = torch.tensor(y_target, dtype=torch.float32)
+        self.y_target_no_mask = torch.tensor(y_target, dtype=torch.float32)
         self.missing_rate = missing_rate
         self.seed = seed
 
         if self.missing_rate > 0.0:
             self._apply_corruption()
+        else:
+            self.mask = torch.ones(self.y_target.shape, dtype=torch.bool)
+
 
     def _apply_corruption(self):
         g = torch.Generator()
         g.manual_seed(self.seed)
 
-        mask = torch.rand(self.X_exog.shape[:2], generator=g) > self.missing_rate
-        self.X_exog = self.X_exog * mask.unsqueeze(-1)
+        self.y_target_no_mask = self.y_target.clone()
+
+        self.mask = torch.rand(self.y_target.shape, generator=g) > self.missing_rate
+        self.y_target = self.y_target * self.mask
 
     def __len__(self):
         return len(self.X_exog)
 
     def __getitem__(self, idx):
-        return self.X_exog[idx], self.y_target[idx]
+        return {
+            "X_exog": self.X_exog[idx],
+            "mask": self.mask[idx],
+            "y_target": self.y_target[idx],
+            "y_target_no_mask" : self.y_target[idx],
+        }
 
 
 def load_market_dataloader(
@@ -53,13 +64,13 @@ def load_market_dataloader(
     val_dataset = EPFDataset(
         data['X_exogenous_val'],
         data['Y_target_val'],
-        missing_rate=0.0,
+        missing_rate=missing_rate,
         seed=seed
     )
     test_dataset = EPFDataset(
         data['X_exogenous_test'],
         data['Y_target_test'],
-        missing_rate=0.0,
+        missing_rate=missing_rate,
         seed=seed
     )
 

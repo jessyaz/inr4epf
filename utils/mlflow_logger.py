@@ -15,12 +15,15 @@ class MLflowLogger:
 
     def __enter__(self):
         experiment = mlflow.get_experiment_by_name(self.experiment_name)
-        experiment_id = (
-            experiment.experiment_id
-            if experiment
-            else mlflow.create_experiment(self.experiment_name)
-        )
+        if experiment is None:
+            try:
+                experiment_id = mlflow.create_experiment(self.experiment_name)
+            except mlflow.exceptions.RestException:
 
+                experiment = mlflow.get_experiment_by_name(self.experiment_name)
+                experiment_id = experiment.experiment_id
+        else:
+            experiment_id = experiment.experiment_id
 
         mlflow.end_run()
         mlflow.start_run(experiment_id=experiment_id, run_name=self.run_name)

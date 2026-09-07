@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from utils.metrics import compute_metrics, get_naive_reference
 
+
 def test(model, loader, scaler, device, logger):
     model.eval()
 
@@ -14,24 +15,25 @@ def test(model, loader, scaler, device, logger):
 
     n = 0
     all_pred_f, all_target_f = [], []
-    all_target_p = []
+    all_target_p, all_mask_f = [], []
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Testing"):
             n += 1
 
-            pred_future, y_target = model.forward_step(batch, device)
+            pred_future  = model.forward_step(batch, device)
+
+            y_target = batch["y_target"].to(device)
+            mask_future = batch["mask"][:, lookback:, ...].unsqueeze(-1).to(device)
 
             target_past = get_naive_reference(y_target, lookback, horizon, mode="naive1").unsqueeze(-1)
-            #target_past = y_target[:, :lookback, ...].unsqueeze(-1)
+            target_future = batch["y_target_no_mask"][:, lookback:, ...].to(device).unsqueeze(-1)
 
-            target_future = y_target[:, lookback:, ...].unsqueeze(-1)
+            pf_np = pred_future.detach().cpu().numpy()
+            tf_np = target_future.detach().cpu().numpy()
+            tp_np = target_past.detach().cpu().numpy()
+            mf_np = mask_future.detach().cpu().numpy()
 
-            pf_np = pred_future.detach().cpu().numpy() # predfuture
-            tf_np = target_future.detach().cpu().numpy() #targetfuture
-            tp_np = target_past.detach().cpu().numpy() #targetpast
-
-            #Denormalize
             if scaler is not None:
                 orig_shape_f = pf_np.shape
                 orig_shape_p = tp_np.shape
@@ -42,11 +44,14 @@ def test(model, loader, scaler, device, logger):
             all_pred_f.append(pf_np)
             all_target_f.append(tf_np)
             all_target_p.append(tp_np)
+            all_mask_f.append(mf_np)
 
     preds_f = np.concatenate(all_pred_f, axis=0)
     targets_f = np.concatenate(all_target_f, axis=0)
     targets_p = np.concatenate(all_target_p, axis=0)
+    masks_f = np.concatenate(all_mask_f, axis=0).astype(bool)
 
+    # Métriques calculées sur TOUTES les valeurs (y_target_no_mask), sans filtrage
     rf, maf, mapf, smf, rmaef = compute_metrics(preds_f, targets_f, naive_ref=targets_p)
 
     err = ((preds_f - targets_f) ** 2).mean(axis=(1, 2))
@@ -54,14 +59,32 @@ def test(model, loader, scaler, device, logger):
     worst = ids[-3:]
     best = ids[:3]
 
-    print("worst : ", worst, "best" , best)
+    print("worst : ", worst, "best", best)
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 8))
     for ax, i in zip(axes.flatten(), list(worst) + list(best)):
-        ax.plot(preds_f[i].squeeze(), label="Pred")
-        ax.plot(targets_f[i].squeeze(), label="Target")
-        ax.axvline(lookback, color='r', linestyle='--')
+        pred = preds_f[i].squeeze()
+        target = targets_f[i].squeeze()
+        mask_i = masks_f[i].squeeze().astype(bool)
+
+        ax.plot(pred, label="Pred")
+        ax.plot(target, label="Target", marker="o", markersize=3)
+
+        # Ombre les zones masquées (info visuelle seulement, la target reste la vraie valeur)
+        in_masked_zone = False
+        start = None
+        for j, valid in enumerate(mask_i):
+            if not valid and not in_masked_zone:
+                start = j
+                in_masked_zone = True
+            elif valid and in_masked_zone:
+                ax.axvspan(start - 0.5, j - 0.5, color="red", alpha=0.15)
+                in_masked_zone = False
+        if in_masked_zone:
+            ax.axvspan(start - 0.5, len(mask_i) - 0.5, color="red", alpha=0.15)
+
         ax.legend()
+
     plt.tight_layout()
     logger.log_plot(fig, artifact_path="plot_test/test.png")
     plt.close(fig)
