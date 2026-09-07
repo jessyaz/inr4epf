@@ -15,11 +15,13 @@ def test(model, loader, scaler, device, logger):
 
     n = 0
     all_pred_f, all_target_f = [], []
+
     all_target_p, all_mask_f = [], []
 
     with torch.no_grad():
         for batch in tqdm(loader, desc="Testing"):
             n += 1
+
 
             pred_future  = model.forward_step(batch, device)
 
@@ -34,6 +36,11 @@ def test(model, loader, scaler, device, logger):
             tp_np = target_past.detach().cpu().numpy()
             mf_np = mask_future.detach().cpu().numpy()
 
+            pf_np = pred_future.detach().cpu().numpy() # predfuture
+            tf_np = target_future.detach().cpu().numpy() #targetfuture
+            tp_np = target_past.detach().cpu().numpy() #targetpast
+
+            #Denormalize
             if scaler is not None:
                 orig_shape_f = pf_np.shape
                 orig_shape_p = tp_np.shape
@@ -51,13 +58,15 @@ def test(model, loader, scaler, device, logger):
     targets_p = np.concatenate(all_target_p, axis=0)
     masks_f = np.concatenate(all_mask_f, axis=0).astype(bool)
 
-    # Métriques calculées sur TOUTES les valeurs (y_target_no_mask), sans filtrage
+
+
     rf, maf, mapf, smf, rmaef = compute_metrics(preds_f, targets_f, naive_ref=targets_p)
 
     err = ((preds_f - targets_f) ** 2).mean(axis=(1, 2))
     ids = np.argsort(err)
     worst = ids[-3:]
     best = ids[:3]
+
 
     print("worst : ", worst, "best", best)
 
@@ -70,7 +79,6 @@ def test(model, loader, scaler, device, logger):
         ax.plot(pred, label="Pred")
         ax.plot(target, label="Target", marker="o", markersize=3)
 
-        # Ombre les zones masquées (info visuelle seulement, la target reste la vraie valeur)
         in_masked_zone = False
         start = None
         for j, valid in enumerate(mask_i):
@@ -82,6 +90,7 @@ def test(model, loader, scaler, device, logger):
                 in_masked_zone = False
         if in_masked_zone:
             ax.axvspan(start - 0.5, len(mask_i) - 0.5, color="red", alpha=0.15)
+
 
         ax.legend()
 

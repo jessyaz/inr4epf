@@ -1,10 +1,12 @@
 # --- Bibliothèque externe (clonée par build.sh, jamais vendorisée) ---
 lib/epftoolbox/
+
 models/git-src/
 models/git_src/
 
 datasets/processed/
 datasets/raw/
+
 
 # --- Données brutes et générées (régénérables, pas versionnées) ---
 data/*.csv
@@ -34,6 +36,8 @@ dist/
 venv/
 env/
 
+
+
 # --- IDE ---
 .idea/
 *.iml
@@ -48,7 +52,7 @@ Thumbs.db
 *.local.yaml
 
 # --- A GARDER (ne pas ignorer, malgré des patterns similaires) ---
-!uv.lock
+!uv_last.lock
 !pyproject.toml
 !conf/*.yaml
 !datasets/datasets.yaml

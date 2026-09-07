@@ -35,6 +35,7 @@ def train(model, loaders, optimizer, device, logger):
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1}")):
             n += 1
 
+
             #batch = single_batch
 
             prg = epoch / max(1, 10)
@@ -54,6 +55,7 @@ def train(model, loaders, optimizer, device, logger):
 
             loss_future = (squared_error * mask_future_expanded).sum() / mask_future_expanded.sum().clamp(min=1.0)
 
+
             loss = loss_future
 
             if loss.requires_grad:
@@ -65,22 +67,6 @@ def train(model, loaders, optimizer, device, logger):
 
             loss_dict['MSE'] += loss.item()
 
-            if False:#batch_idx == 5:
-                fig, axes = plt.subplots(2, 3, figsize=(15, 8))
-                axes = axes.flatten()
-                n_plots = min(6, pred_future.shape[0])
-
-                for i in range(n_plots):
-
-                    axes[i].plot(pred_future[i].detach().cpu().squeeze(), label="Pred")
-                    axes[i].plot(target_future[i].detach().cpu().squeeze(), label="Target")
-                   # axes[i].axvline(x=lookback, color='r', linestyle='--')
-                    axes[i].set_title(f"Batch Sample {i}")
-                    axes[i].legend()
-
-                plt.tight_layout()
-                logger.log_plot(fig, artifact_path=f"plots/epoch_{epoch+1}.png")
-                plt.close(fig)
 
             if batch_idx == 5:
                 fig, axes = plt.subplots(2, 3, figsize=(15, 8))
@@ -113,6 +99,7 @@ def train(model, loaders, optimizer, device, logger):
                             in_masked_zone = False
                     if in_masked_zone:
                         axes[i].axvspan(start - 0.5, len(mask) - 0.5, color="red", alpha=0.15)
+
 
                     axes[i].set_title(f"Batch Sample {i}")
                     axes[i].legend()

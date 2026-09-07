@@ -155,9 +155,11 @@ class Model(nn.Module):
         )
 
 
+
     def forward_step(self, batch, device, prg=1.0, debug=False):
         X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
         X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
+
 
         lookback = self.cfg.lookback
         horizon = self.cfg.horizon
@@ -168,11 +170,11 @@ class Model(nn.Module):
         y_past = y_target[:, :lookback]
 
         exog_past, exog_future = X_exog[:, :lookback], X_exog[:, lookback:]
-
         t_past, t_future = make_time_scale(lookback, horizon, device=device)
 
         elems_past = build_past_elements(t_past, y_past)
         z_lb = self.deepsets_encoder(elems_past, mask_past)  # (batch, deepsets.output_dim)
+
 
         h_t, c_t = self.lstm_encoder(exog_past)
 

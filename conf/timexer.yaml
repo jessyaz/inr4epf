@@ -1,0 +1,40 @@
+hydra:
+  job:
+    chdir: false
+
+registry: ???
+run_dir : null
+
+dataset:
+  name: NP #FR et autres
+  batch_size: 16
+  missing_rate: 0.1
+
+seed: 42
+device: auto
+
+model_uid: null
+
+model:
+  name: "timexer"
+  lr: 0.0001
+  num_epoch : 50
+  lookback: 168             # seq_len officiel (7 jours), cf. scripts/forecast_exogenous/EPF/TimeXer.sh
+  horizon: 24               # pred_len officiel
+  exog_dim: 2
+  enc_in: 3                 # exog_dim + 1 (Price inclus, target en derniere colonne)
+  patch_len: 24              # patching officiel : 1 jour = 1 patch
+  d_model: 512
+  d_ff: 2048                # defaut run.py (non surcharge dans le script EPF)
+  n_heads: 8                 # defaut run.py
+  e_layers: 3
+  dropout: 0.1               # defaut run.py
+  activation: "gelu"         # defaut run.py
+  embed: "timeF"             # defaut run.py (sans effet, x_mark=None dans notre interface)
+  freq: "h"                  # defaut run.py
+  factor: 1                  # defaut run.py (attention factor)
+  use_norm: 1                # defaut run.py (1=True, normalisation interne Non-stationary Transformer)
+
+mlflow:
+  experiment_name: icassp-dev
+  run_name: null

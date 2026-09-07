@@ -13,6 +13,7 @@ def validate(model, loader, device):
     for batch_idx, batch in enumerate(loader):
         n += 1
 
+
         pred_future = model.forward_step(batch, device)
 
         y_target = batch["y_target"].to(device)
@@ -24,6 +25,7 @@ def validate(model, loader, device):
         target_future = batch["y_target_no_mask"][:, lookback:, ...].to(device).unsqueeze(-1)
 
         mask_future_expanded = mask_future.unsqueeze(-1).float()
+
 
         loss = ((pred_future - target_future) ** 2).mean()
 
