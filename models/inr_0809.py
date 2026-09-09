@@ -6,9 +6,11 @@ import torch.nn as nn
 
 
 class INR(nn.Module):
-    def __init__(self, cfg, logger = None):
+    def __init__(self, cfg, logger=None):
         super().__init__()
         cfg = cfg.inr
+        self.num_layers = cfg.num_layers
+        self.hidden_dim = cfg.hidden_dim
 
         self.fourier = PE(cfg.num_frequencies, logger)
         fourier_dim = 2 * cfg.num_frequencies
@@ -18,36 +20,22 @@ class INR(nn.Module):
             nn.Linear(dims[i], dims[i + 1], bias=True)
             for i in range(cfg.num_layers)
         ])
-
-        self.norms = nn.ModuleList([
-            nn.LayerNorm(cfg.hidden_dim, elementwise_affine=False)  # affine=False car FiLM s'en charge déjà
-            for _ in range(cfg.num_layers)
-        ])
-
         self.output_layer = nn.Linear(cfg.hidden_dim, cfg.output_dim, bias=True)
 
     def set_epoch(self, epoch):
         self.fourier.set_epoch(epoch)
 
+    def forward(self, t, film):
+        gamma, beta = film  # chacun (batch, num_layers * hidden_dim)
+        batch_size = gamma.shape[0]
+        gamma = gamma.view(batch_size, self.num_layers, self.hidden_dim)
+        beta = beta.view(batch_size, self.num_layers, self.hidden_dim)
 
-    def forward(self, t, films):
         x = self.fourier(t)
-        for layer, norm, (gamma, beta) in zip(self.layers, self.norms, films):
+        for i, layer in enumerate(self.layers):
             x = layer(x)
-
-            x = norm(x)
-
-
-            x = gamma * x + beta
-            # x = torch.exp(-torch.square(torch.cos(x))) Lead to 2.45 no bias
-#            x = torch.exp(-torch.square(x)) # With variable - pe -> lead to 2.42 -- best no bias
-
-           #  x = torch.exp(-torch.square(torch.cos(x))) # lead to 2.58 no bias
-            #x = torch.exp(-torch.square(torch.cos(x))) #  lead to 2.49 bias
-          #  x = torch.exp(-torch.square(x)) #  lead to 3.06 bias
+            x = gamma[:, i, :] * x + beta[:, i, :]
             x = torch.nn.functional.gelu(x)
-
-            #x = torch.relu(x)
         return self.output_layer(x)
 
 
@@ -95,31 +83,24 @@ class PE(nn.Module):
 
 class FiLMGenerator(nn.Module):
     def __init__(self, z_dim, hidden_dim, feature_dims):
-
         super().__init__()
-        self.heads = nn.ModuleList([
-            nn.Sequential(
-                nn.Linear(z_dim, hidden_dim),
-                nn.ReLU(),
-                nn.Linear(hidden_dim, 2 * feature_dim),
-            )
-            for feature_dim in feature_dims
-        ])
-        for head in self.heads:
-            nn.init.zeros_(head[-1].weight)
-            nn.init.zeros_(head[-1].bias)
-            # feature_dim = taille de gamma = taille de beta
-            feature_dim = head[-1].bias.shape[0] // 2
-            with torch.no_grad():
-                head[-1].bias[:feature_dim] = 1.0  # gamma initial = 1
+        self.feature_dims = feature_dims  # entier : taille totale (num_layers * hidden_dim)
+
+        self.net = nn.Sequential(
+            nn.Linear(z_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 2 * feature_dims),
+        )
+
+        nn.init.zeros_(self.net[-1].weight)
+        nn.init.zeros_(self.net[-1].bias)
+        with torch.no_grad():
+            self.net[-1].bias[:feature_dims] = 1.0  # gamma initial = 1, beta reste à 0
 
     def forward(self, z):
-        films = []
-        for head in self.heads:
-            gamma, beta = head(z).chunk(2, dim=-1)
-            films.append((gamma, beta))
-        return films
-
+        out = self.net(z)  # (batch, 2 * feature_dims)
+        gamma, beta = out.chunk(2, dim=-1)  # chacun (batch, feature_dims)
+        return gamma, beta
 
 
 class LSTMEncoder(nn.Module):
@@ -133,20 +114,13 @@ class LSTMEncoder(nn.Module):
         return h.squeeze(0), c.squeeze(0)
 
 class DeepSetsEncoder(nn.Module):
-
-    def __init__(self, input_dim, hidden_dim, output_dim, aggregation="mean"):
+    def __init__(self, input_dim, hidden_dim, aggregation="mean"):
         super().__init__()
         self.aggregation = aggregation
         self.phi = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-        )
-        self.rho = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, output_dim),
         )
 
     def forward(self, elements, mask):
@@ -162,7 +136,7 @@ class DeepSetsEncoder(nn.Module):
         else:
             aggregated = embeddings.sum(dim=1)
 
-        return self.rho(aggregated)
+        return aggregated  # (batch, hidden_dim)
 
 
 def make_time_scale(lookback, horizon, device=None):
@@ -180,7 +154,7 @@ def build_past_elements(t_past, y_past):
 
 
 class Model(nn.Module):
-    def __init__(self, cfg, logger = None):
+    def __init__(self, cfg, logger=None):
         super().__init__()
         self.cfg = cfg.model
         self.cfg_data = cfg.dataset
@@ -189,19 +163,18 @@ class Model(nn.Module):
         self.deepsets_encoder = DeepSetsEncoder(
             input_dim=self.cfg.deepsets.input_dim,
             hidden_dim=self.cfg.deepsets.hidden_dim,
-            output_dim=self.cfg.deepsets.output_dim,
+            aggregation=self.cfg.deepsets.aggregation,
         )
-        self.predictor = nn.Linear(self.cfg.deepsets.output_dim, self.cfg.horizon)
 
         self.lstm_encoder = LSTMEncoder(self.cfg.lstm.input_dim, self.cfg.lstm.hidden_dim)
 
         self.inr = INR(self.cfg, logger)
 
-        z_dim = self.cfg.deepsets.output_dim + self.cfg.lstm.hidden_dim
+        z_dim = self.cfg.deepsets.hidden_dim + self.cfg.lstm.hidden_dim
         self.film_generator = FiLMGenerator(
             z_dim=z_dim,
             hidden_dim=self.cfg.inr.film_hidden_dim,
-            feature_dims=[self.cfg.inr.hidden_dim] * self.cfg.inr.num_layers,
+            feature_dims=self.cfg.inr.num_layers * self.cfg.inr.hidden_dim,
         )
 
     def set_epoch(self, epoch):
@@ -211,21 +184,17 @@ class Model(nn.Module):
         X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
         X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
 
-
         lookback = self.cfg.lookback
         horizon = self.cfg.horizon
 
         mask_past = mask[:, :lookback]
-        mask_future = mask[:, lookback:]
-
         y_past = y_target[:, :lookback]
 
         exog_past, exog_future = X_exog[:, :lookback], X_exog[:, lookback:]
         t_past, t_future = make_time_scale(lookback, horizon, device=device)
 
         elems_past = build_past_elements(t_past, y_past)
-        z_lb = self.deepsets_encoder(elems_past, mask_past)  # (batch, deepsets.output_dim)
-
+        z_lb = self.deepsets_encoder(elems_past, mask_past)  # (batch, deepsets.hidden_dim)
 
         h_t, c_t = self.lstm_encoder(exog_past)
 
@@ -234,7 +203,6 @@ class Model(nn.Module):
 
         for t in range(horizon):
             t_ = t_future[t].expand(batch_size)
-
             x_t = exog_future[:, t, :]
             h_t, c_t = self.lstm_encoder.cell(x_t, (h_t, c_t))
 
@@ -244,6 +212,4 @@ class Model(nn.Module):
             pred_t = self.inr(t_, films)
             predictions.append(pred_t)
 
-        pred_future = torch.stack(predictions, dim=1)  # (batch, horizon, output_dim)
-
-        return pred_future
+        return torch.stack(predictions, dim=1)  # (batch, horizon, output_dim)

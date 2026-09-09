@@ -22,12 +22,12 @@ fi
 
 ### BEFORE PROD
 # Probleme probablement à ce niveau : --editable reer un workspace qui ne devrait pas exister
-echo "[3/4] install"
-if command -v uv &> /dev/null; then
-    uv add --editable "${LIB_DIR}"
-else
-    pip install -e "${LIB_DIR}" --break-system-packages 2>/dev/null || pip install -e "${LIB_DIR}"
-fi
+#echo "[3/4] install"
+#if command -v uv &> /dev/null; then
+#    uv add --editable "${LIB_DIR}"
+#else
+#    pip install -e "${LIB_DIR}" --break-system-packages 2>/dev/null || pip install -e "${LIB_DIR}"
+#fi
 
 echo "[4/4] tree"
 if command -v tree &> /dev/null; then

@@ -3,10 +3,10 @@ hydra:
     chdir: false
 
 registry: ???
-run_dir : null
+run_dir: null
 
 dataset:
-  name: FR #FR
+  name: FR
   batch_size: 64
   missing_rate: 0.0
 
@@ -18,7 +18,7 @@ model_uid: null
 model:
   name: "inr"
   lr: 0.001
-  num_epoch : 50
+  num_epoch: 50
   grad_clip_norm: 1.0
   lookback: 144
   horizon: 24
@@ -26,13 +26,11 @@ model:
   deepsets:
     input_dim: 2
     hidden_dim: 64
-    output_dim: 32
-
+    aggregation: sum
 
   lstm:
     input_dim: 2
-    hidden_dim: 64
-
+    hidden_dim: 256
 
   inr:
     num_frequencies: 8
@@ -41,7 +39,8 @@ model:
     output_dim: 1
     film_hidden_dim: 128
 
-
 mlflow:
-  experiment_name: icassp-0-tokill
+  experiment_name: icassp-1-tokill
   run_name: null
+
+

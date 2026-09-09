@@ -102,15 +102,16 @@ class Model(nn.Module):
         return out[:, :, -1:]                                # garde uniquement le canal cible (Price)
 
     def forward_step(self, batch, device, debug: bool = False):
-        X_exog, Y_target = batch
-        X_exog, Y_target = X_exog.to(device), Y_target.to(device)
+        X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
+        X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
+
         lookback = self.cfg.lookback
 
         exog_past = X_exog[:, :lookback]
-        y_past = Y_target[:, :lookback].unsqueeze(-1)
+        y_past = y_target[:, :lookback].unsqueeze(-1)
 
         x_enc = torch.cat([exog_past, y_past], dim=-1)  # target en derniere colonne
 
         pred_future = self(x_enc)
 
-        return pred_future, Y_target
+        return pred_future

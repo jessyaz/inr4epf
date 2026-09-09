@@ -1,29 +1,9 @@
-"""
-Interface entre l'entrainement (trainer.py/valider.py/tester.py) et le modele
-vendored TimeXer (thuml/TimeXer, NeurIPS 2024), clone dans models/git-src/
-via clone_models.sh.
 
-Convention native du modele vendored (cf. dataset/EPF/ + scripts/forecast_exogenous/EPF/TimeXer.sh
-du repo original -- deja evalue sur les 5 marches epftoolbox par les auteurs eux-memes) :
-
-    x_enc      : [B, seq_len, enc_in]   toute la fenetre passee, TARGET EN DERNIERE COLONNE
-                 (convention 'features=MS' : x_enc[:, :, -1] = Price, x_enc[:, :, :-1] = exogenes)
-    x_mark_enc : covariables temporelles (peut etre None, gere nativement par le modele)
-    x_dec, x_mark_dec : requis par la signature partagee de la lib, mais IGNORES en interne
-                 par Model.forecast() en mode 'MS' -- on peut passer des tenseurs vides.
-
-Le modele ne travaille que sur le PASSE (x_enc) pour produire le futur -- contrairement a
-epf-transformers, il n'a PAS besoin des exogenes futures en entree explicite (le mecanisme
-d'attention croisee endogene/exogene se fait uniquement sur la fenetre d'observation passee).
-pred_past n'existe pas ici non plus -- modele purement forecast-only, comme epf_transformer.
-"""
 
 import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import torch
-import torch.nn as nn
 
 import importlib.util
 
@@ -34,13 +14,11 @@ from types import SimpleNamespace
 import torch
 import torch.nn as nn
 
+
+from utils.interpolate import linear_interpolate_masked
+
 _VENDOR_PATH = Path(__file__).resolve().parent.parent / "git_src" / "TimeXer"
 
-# TimeXer utilise des noms de package generiques (models, layers, utils, data_provider,
-# exp) qui collisionnent avec la structure du projet (notamment notre propre 'utils/').
-# On isole temporairement ces noms de sys.modules pendant le chargement, pour forcer
-# Python a resoudre les imports internes de TimeXer contre SON PROPRE code vendored,
-# puis on restaure les modules originaux du projet juste apres.
 _CONFLICTING_TOP_LEVEL = ["models", "utils", "layers", "data_provider", "exp"]
 
 
@@ -79,7 +57,6 @@ class Model(nn.Module):
         self.cfg = cfg.model
         self.name = "timexer"
 
-        # TimeXer attend un objet "configs" type argparse.Namespace (voir run.py du repo original)
         configs = SimpleNamespace(
             task_name="long_term_forecast",
             features="MS",
@@ -111,16 +88,25 @@ class Model(nn.Module):
         return self.backbone(x_enc, None, dummy_dec, None)
 
     def forward_step(self, batch, device, debug: bool = False):
-        X_exog, Y_target = batch
-        X_exog, Y_target = X_exog.to(device), Y_target.to(device)
+
+        X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
+        X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
+
         lookback = self.cfg.lookback
+        horizon = self.cfg.horizon
+
+        mask_past = mask[:, :lookback].unsqueeze(-1).float()
+
+
 
         exog_past = X_exog[:, :lookback]              # [B, lookback, exog_dim]
-        y_past = Y_target[:, :lookback].unsqueeze(-1)  # [B, lookback, 1]
+        y_past = y_target[:, :lookback].unsqueeze(-1)  # [B, lookback, 1]
+
+        y_past = linear_interpolate_masked(y_past, mask_past).unsqueeze(-1)
 
         # x_enc : target en DERNIERE colonne, cf. convention officielle 'features=MS'
-        x_enc = torch.cat([exog_past, y_past], dim=-1)  # [B, lookback, exog_dim+1]
+        x_enc = torch.cat([mask_past, exog_past, y_past], dim=-1)  # [B, lookback, exog_dim+1]
 
         pred_future = self(x_enc)  # [B, horizon, 1] -- deja au bon format
 
-        return pred_future, Y_target
+        return pred_future

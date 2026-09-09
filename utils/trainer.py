@@ -31,6 +31,9 @@ def train(model, loaders, optimizer, device, logger):
 
     for epoch in range(num_epochs):
         model.train()
+        if hasattr(model, "set_epoch"):
+            model.set_epoch(epoch)
+
         n = 0
         for batch_idx, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch+1}")):
             n += 1
@@ -38,9 +41,9 @@ def train(model, loaders, optimizer, device, logger):
 
             #batch = single_batch
 
-            prg = epoch / max(1, 10)
 
-            pred_future = model.forward_step(batch, device, prg)
+
+            pred_future = model.forward_step(batch, device)
 
             y_target = batch["y_target"].unsqueeze(-1).to(device)
             mask_future = batch["mask"][:, lookback:, ...].unsqueeze(-1).to(device)
@@ -52,8 +55,10 @@ def train(model, loaders, optimizer, device, logger):
             #loss_future = ((pred_future - target_future) ** 2).mean()
 
             squared_error = (pred_future - target_future) ** 2
-
             loss_future = (squared_error * mask_future_expanded).sum() / mask_future_expanded.sum().clamp(min=1.0)
+
+            #squared_error = (pred_future - target_future) ** 2
+            #loss_future = squared_error.mean()
 
 
             loss = loss_future
@@ -61,8 +66,8 @@ def train(model, loaders, optimizer, device, logger):
             if loss.requires_grad:
                 optimizer.zero_grad()
                 loss.backward()
-                if grad_clip_norm is not None:
-                    torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+             #   if grad_clip_norm is not None:
+            #        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
                 optimizer.step()
 
             loss_dict['MSE'] += loss.item()
@@ -78,7 +83,7 @@ def train(model, loaders, optimizer, device, logger):
                     target = target_future[i].detach().cpu().squeeze().numpy()
                     mask = mask_future[i].detach().cpu().squeeze().numpy().astype(bool)
 
-                    # Remplace les positions masquées par NaN -> matplotlib laisse un vrai trou, pas un 0
+
                     target_display = target.copy()
                     target_display[~mask] = float("nan")
 
@@ -87,7 +92,7 @@ def train(model, loaders, optimizer, device, logger):
                     axes[i].plot(x, pred, label="Pred")
                     axes[i].plot(x, target_display, label="Target", marker="o", markersize=3)
 
-                    # Ombre les zones masquées pour les repérer visuellement
+
                     in_masked_zone = False
                     start = None
                     for j, valid in enumerate(mask):

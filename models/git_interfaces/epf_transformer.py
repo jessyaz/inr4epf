@@ -35,8 +35,10 @@ class Model(nn.Module):
         return self.backbone(values, features)
 
     def forward_step(self, batch, device, debug: bool = False):
-        X_exog, Y_target = batch          # X_exog: [B, 360, 2], Y_target: [B, 360]
-        X_exog, Y_target = X_exog.to(device), Y_target.to(device)
+        X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
+        X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
+
+
         lookback = self.cfg.lookback
 
         inputs = torch.cat([Y_target.unsqueeze(-1), X_exog], dim=-1)   # [B, 360, 3] -- toute la fenetre
@@ -47,4 +49,4 @@ class Model(nn.Module):
 
         pred_future = self(values, features)[:, -horizon:].unsqueeze(-1)
 
-        return pred_future, Y_target
+        return pred_future

@@ -18,6 +18,8 @@ from models.naif.naive_model import Model as naive_model
 
 
 from models.inr_3108 import Model as inr_3108
+from models.inr_0809 import Model as inr_0809
+from models.inr_0909 import Model as inr_0909
 
 #Git models
 from models.git_interfaces.epf_transformer import Model as epf_transformer
@@ -35,6 +37,9 @@ MODEL_REGISTRY = {
 
 
     "inr_3108": inr_3108,
+    "inr_0809" : inr_0809,
+    "inr_0909" : inr_0909,
+
 
     "epf_transformer": epf_transformer,
     "timexer": timexer,
@@ -86,12 +91,20 @@ def main(cfg: DictConfig):
 
     with MLflowLogger(cfg) as logger:
 
+        model.inr.fourier.logger = logger
+
         print("Training ...")
-        #optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.lr)#, weight_decay=1e-4)
-        optimizer = torch.optim.Adam([
-            {"params": model.inr.parameters(), "weight_decay": 1e-1},
-            {"params": [p for n, p in model.named_parameters() if not n.startswith("inr.")], "weight_decay": 0.0},
-        ], lr=cfg.model.lr)
+
+        #if hasattr(model, "inr"):
+
+          #  param_groups = [
+         #       {"params": model.inr.parameters(), "weight_decay": 1e-1},
+           #     {"params": [p for n, p in model.named_parameters() if not n.startswith("inr.")], "weight_decay": 0.0},
+          #  ]
+           # optimizer = torch.optim.Adam(param_groups, lr=cfg.model.lr)
+        #else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.lr)
+
 
         loaders = {'train_loader':train_loader ,'val_loader':val_loader}
         loss_dict = trainer(model, loaders, optimizer, device, logger)
