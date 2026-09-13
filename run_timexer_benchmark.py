@@ -14,6 +14,14 @@ from utils.trainer import train as trainer
 from utils.tester import test as tester
 from utils.mlflow_logger import MLflowLogger
 
+TIMEXER_CONFIGS = {
+    "NP":  {"e_layers": 3, "d_ff": 512,  "batch_size": 4},
+    "PJM": {"e_layers": 3, "d_ff": 2048, "batch_size": 16},
+    "BE":  {"e_layers": 2, "d_ff": 512,  "batch_size": 16},
+    "FR":  {"e_layers": 2, "d_ff": 2048, "batch_size": 16},
+    "DE":  {"e_layers": 1, "d_ff": 2048, "batch_size": 4},
+}
+
 DATASETS = ["FR", "NP", "PJM", "BE", "DE"]
 MISSING_RATIOS = ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5"]
 SEEDS = [0, 1, 2, 3, 4]
@@ -23,22 +31,28 @@ WORKERS_PER_GPU = 2
 
 
 def build_cfg(dataset_name, missing_ratio, seed, model_uid, run_dir):
-    cfg = OmegaConf.load(f"best_configs/best_config_{dataset_name}.yaml")
-    cfg.seed = seed
-    cfg.model_uid = model_uid
-    cfg.run_dir = str(run_dir)
-    cfg.dataset.missing_rate = float(missing_ratio)
-    cfg.model.use_exog = True
-    cfg.model.num_epoch = 50
-
-    cfg.mlflow.experiment_name = f"icassp2-{dataset_name}-{missing_ratio}"
-    cfg.mlflow.run_name = f"inrv3_{model_uid}"
+    dcfg = TIMEXER_CONFIGS[dataset_name]
+    cfg = OmegaConf.create({
+        "registry": "timexer",
+        "seed": seed, "device": "auto", "run_dir": str(run_dir), "model_uid": model_uid,
+        "dataset": {"name": dataset_name, "batch_size": dcfg["batch_size"], "missing_rate": float(missing_ratio)},
+        "model": {
+            "lookback": 168, "horizon": 24, "num_epoch": 50, "lr": 1e-4,
+            "use_norm": True, "patch_len": 24, "enc_in": 3,
+            "d_model": 512, "d_ff": dcfg["d_ff"], "n_heads": 8, "e_layers": dcfg["e_layers"],
+            "dropout": 0.1, "activation": "gelu", "embed": "timeF", "freq": "h", "factor": 1,
+        },
+        "mlflow": {
+            "experiment_name": f"icassp2-{dataset_name}-{missing_ratio}",
+            "run_name": f"timexerv2_{model_uid}",
+        },
+    })
     return cfg
 
 
 def run_one(dataset_name, missing_ratio, seed, device):
     model_uid = uuid.uuid4().hex[:8]
-    run_dir = Path("runs") / f"{model_uid}_inrv3"
+    run_dir = Path("runs") / f"{model_uid}_timexerv2"
     run_dir.mkdir(parents=True, exist_ok=True)
 
     cfg = build_cfg(dataset_name, missing_ratio, seed, model_uid, run_dir)
@@ -55,7 +69,7 @@ def run_one(dataset_name, missing_ratio, seed, device):
         mlflow.set_tag("seed", seed)
         mlflow.set_tag("missing_ratio", missing_ratio)
 
-        optimizer = model.configure_optimizer()
+        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.lr)
         loaders = {"train_loader": train_loader, "val_loader": val_loader}
         trainer(model, loaders, optimizer, device, logger)
 
@@ -66,7 +80,7 @@ def run_one(dataset_name, missing_ratio, seed, device):
         loss_dict_test = tester(model, test_loader, scaler, device, logger)
         logger.tester_flag = True
 
-    print(f"[PID {mp.current_process().pid} / {device}] INRv3 | {dataset_name} ratio={missing_ratio} seed={seed} -> {loss_dict_test}")
+    print(f"[PID {mp.current_process().pid} / {device}] TimeXerv2 | {dataset_name} ratio={missing_ratio} seed={seed} -> {loss_dict_test}")
     return dataset_name, missing_ratio, seed, loss_dict_test
 
 
@@ -95,7 +109,7 @@ def main():
     mlflow.set_tracking_uri(tracking_uri)
 
     tasks = [(d, r, s) for d in DATASETS for r in MISSING_RATIOS for s in SEEDS]
-    print(f"Total : {len(tasks)} runs INRv3 a effectuer.")
+    print(f"Total : {len(tasks)} runs TimeXerv2 a effectuer.")
 
     n_workers = N_GPUS * WORKERS_PER_GPU
     manager = mp.Manager()

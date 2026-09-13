@@ -2,16 +2,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-
-import importlib.util
-
-import sys
-from pathlib import Path
-from types import SimpleNamespace
-
 import torch
 import torch.nn as nn
-
 
 from utils.interpolate import linear_interpolate_masked
 
@@ -39,25 +31,28 @@ def _load_timexer_backbone():
         ) from e
     finally:
         sys.path.remove(str(_VENDOR_PATH))
-        # nettoie les modules TimeXer fraichement charges sous ces noms generiques
         for name in list(sys.modules.keys()):
             if name.split(".")[0] in _CONFLICTING_TOP_LEVEL and name not in stashed:
                 del sys.modules[name]
-        # restaure les modules originaux du projet (utils.trainer, etc.)
         sys.modules.update(stashed)
 
 
 TimeXerBackbone = _load_timexer_backbone()
 
+
 class Model(nn.Module):
+    """
+    TimeXer, fidele a l'architecture officielle (Wang et al.) : enc_in = 2
+    exogenes + 1 cible = 3, AUCUN canal masque. Le manque de donnees est gere
+    uniquement via l'interpolation lineaire de l'endogene avant l'entree du
+    modele -- TimeXer ne recoit aucune information explicite sur quels points
+    sont observes vs interpoles.
+    """
+
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg.model
         self.name = "timexer"
-
-        # Si absent de la config, on garde le comportement historique (masque inclus)
-        # pour ne rien casser sur des configs déjà existantes qui ne connaissent pas ce champ.
-        self.include_mask_channel = getattr(self.cfg, "include_mask_channel", True)
 
         configs = SimpleNamespace(
             task_name="long_term_forecast",
@@ -82,21 +77,15 @@ class Model(nn.Module):
         self.backbone = TimeXerBackbone(configs)
 
     def set_epoch(self, epoch):
-        # No-op : TimeXer n'a pas de logique dépendante de l'epoch (contrairement au PE de l'INR),
-        # mais trainer.py appelle model.set_epoch(epoch) sans garde hasattr() -- cette méthode
-        # doit donc exister pour éviter un AttributeError.
         pass
 
     def forward(self, x_enc: torch.Tensor) -> torch.Tensor:
-        # x_mark_enc=None gere nativement par DataEmbedding_inverted (cf. Embed.py)
-        # x_dec/x_mark_dec ignores en interne par forecast() en mode MS -> placeholders vides
         dummy_dec = torch.zeros(
             x_enc.size(0), self.cfg.horizon, x_enc.size(2), device=x_enc.device
         )
         return self.backbone(x_enc, None, dummy_dec, None)
 
     def forward_step(self, batch, device, debug: bool = False):
-
         X_exog, mask, y_target = batch["X_exog"], batch["mask"], batch["y_target"]
         X_exog, mask, y_target = X_exog.to(device), mask.to(device), y_target.to(device)
 
@@ -104,23 +93,16 @@ class Model(nn.Module):
         horizon = self.cfg.horizon
 
         mask_past = mask[:, :lookback].unsqueeze(-1).float()
+        exog_past = X_exog[:, :lookback]
+        y_past = y_target[:, :lookback].unsqueeze(-1)
 
-
-
-        exog_past = X_exog[:, :lookback]              # [B, lookback, exog_dim]
-        y_past = y_target[:, :lookback].unsqueeze(-1)  # [B, lookback, 1]
-
+        # mask_past utilise UNIQUEMENT pour l'interpolation, jamais transmis au modele
         y_past = linear_interpolate_masked(y_past, mask_past).unsqueeze(-1)
 
         # x_enc : target en DERNIERE colonne, cf. convention officielle 'features=MS'
-        if self.include_mask_channel:
-            # enc_in attendu = exog_dim + 1 (cible) + 1 (masque)
-            x_enc = torch.cat([mask_past, exog_past, y_past], dim=-1)
-        else:
-            # enc_in attendu = exog_dim + 1 (cible), SANS masque
-            # -> architecture strictement identique à celle du papier TimeXer (enc_in=3 sur EPF)
-            x_enc = torch.cat([exog_past, y_past], dim=-1)
+        # enc_in = exog_dim + 1, AUCUN canal masque -- architecture officielle
+        x_enc = torch.cat([exog_past, y_past], dim=-1)
 
-        pred_future = self(x_enc)  # [B, horizon, 1] -- deja au bon format
+        pred_future = self(x_enc)
 
         return pred_future

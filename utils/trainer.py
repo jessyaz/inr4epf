@@ -45,18 +45,13 @@ def train(model, loaders, optimizer, device, logger):
 
             pred_future = model.forward_step(batch, device)
 
-            y_target = batch["y_target"].unsqueeze(-1).to(device)
-            mask_future = batch["mask"][:, lookback:, ...].unsqueeze(-1).to(device)
 
-            target_past          = y_target[:, :lookback, ...]
-            target_future        = y_target[:, lookback:, ...]
-            mask_future_expanded = mask_future.float()
+            y_target_no_mask = batch["y_target_no_mask"].unsqueeze(-1).to(device)
+            mask_future = batch["mask"][:, lookback:, ...].unsqueeze(-1).to(device)  # garde pour les plots
 
-            #loss_future = ((pred_future - target_future) ** 2).mean()
+            target_future = y_target_no_mask[:, lookback:, ...]
 
-            squared_error = (pred_future - target_future) ** 2
-            loss_future = (squared_error * mask_future_expanded).sum() / mask_future_expanded.sum().clamp(min=1.0)
-
+            loss_future = ((pred_future - target_future) ** 2).mean()
 
 
 
