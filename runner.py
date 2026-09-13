@@ -95,15 +95,7 @@ def main(cfg: DictConfig):
 
         print("Training ...")
 
-        #if hasattr(model, "inr"):
-
-          #  param_groups = [
-         #       {"params": model.inr.parameters(), "weight_decay": 1e-1},
-           #     {"params": [p for n, p in model.named_parameters() if not n.startswith("inr.")], "weight_decay": 0.0},
-          #  ]
-           # optimizer = torch.optim.Adam(param_groups, lr=cfg.model.lr)
-        #else:
-        optimizer = torch.optim.Adam(model.parameters(), lr=cfg.model.lr)
+        optimizer = model.configure_optimizer()
 
 
         loaders = {'train_loader':train_loader ,'val_loader':val_loader}

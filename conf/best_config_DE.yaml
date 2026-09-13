@@ -1,46 +1,38 @@
 hydra:
   job:
     chdir: false
-
-registry: ???
+registry: inr_0909
 run_dir: null
-
 dataset:
-  name: FR
+  name: DE
   batch_size: 64
   missing_rate: 0.0
-
 seed: 42
 device: auto
-
 model_uid: null
-
 model:
-  name: "inr"
-  lr: 0.00023646613478424026
-  num_epoch: 50
-  grad_clip_norm: 1.0
-  lookback: 144
+  name: inr
+  num_epoch: 100
+  lookback: 168
   horizon: 24
-
+  optim:
+    lr: 0.001
+    lr_inr: 0.0004
+    lr_pe: 0.0002
   deepsets:
     input_dim: 2
-    hidden_dim: 64
-    aggregation: sum
-
+    hidden_dim: 192
   lstm:
     input_dim: 2
     hidden_dim: 64
-
   inr:
     num_frequencies: 8
-    hidden_dim: 256
+    pe_learnable: true
+    hidden_dim: 128
+    activation: gelu
     num_layers: 3
     output_dim: 1
-    film_hidden_dim: 64
-
+    film_hidden_dim: 128
 mlflow:
-  experiment_name: icassp-expe-09-0
-
-
+  experiment_name: icassp-veridis
   run_name: null

@@ -35,7 +35,7 @@ class EPFDataset(Dataset):
             "X_exog": self.X_exog[idx],
             "mask": self.mask[idx],
             "y_target": self.y_target[idx],
-            "y_target_no_mask" : self.y_target[idx],
+            "y_target_no_mask" : self.y_target_no_mask[idx],
         }
 
 

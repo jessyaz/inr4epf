@@ -15,32 +15,36 @@ device: auto
 
 model_uid: null
 
+
 model:
   name: "inr"
-  lr: 0.001
-  num_epoch: 50
-  grad_clip_norm: 1.0
-  lookback: 144
+  num_epoch: 100
+  lookback: 168
   horizon: 24
+
+  optim:
+    lr: 1e-3         # DeepSetsEncoder, LSTMEncoder, FiLMGenerator
+    lr_inr: 4e-4      # couches linéaires de l'INR
+    lr_pe: 2e-4       # fréquences du PE -- actif car pe_learnable=true
 
   deepsets:
     input_dim: 2
-    hidden_dim: 64
-    aggregation: sum
+    hidden_dim: 64      # sortie réelle = 2*hidden_dim (mean+max concaténés)
 
   lstm:
     input_dim: 2
-    hidden_dim: 256
+    hidden_dim: 64      # gardé symétrique au deepsets pour équilibrer z_dim
 
   inr:
-    num_frequencies: 8
-    hidden_dim: 64
+    num_frequencies: 16   # meilleur résultat du sweep (16 > 32 > 64)
+    pe_learnable: true     # bat pe_learnable=false empiriquement
+    hidden_dim: 128
+    activation: gelu       # bat silu empiriquement
     num_layers: 3
     output_dim: 1
     film_hidden_dim: 128
 
+
 mlflow:
-  experiment_name: icassp-1-tokill
+  experiment_name: icassp-veridis
   run_name: null
-
-

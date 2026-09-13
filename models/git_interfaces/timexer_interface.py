@@ -1,5 +1,3 @@
-
-
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -57,6 +55,10 @@ class Model(nn.Module):
         self.cfg = cfg.model
         self.name = "timexer"
 
+        # Si absent de la config, on garde le comportement historique (masque inclus)
+        # pour ne rien casser sur des configs déjà existantes qui ne connaissent pas ce champ.
+        self.include_mask_channel = getattr(self.cfg, "include_mask_channel", True)
+
         configs = SimpleNamespace(
             task_name="long_term_forecast",
             features="MS",
@@ -78,6 +80,12 @@ class Model(nn.Module):
             factor=self.cfg.factor,
         )
         self.backbone = TimeXerBackbone(configs)
+
+    def set_epoch(self, epoch):
+        # No-op : TimeXer n'a pas de logique dépendante de l'epoch (contrairement au PE de l'INR),
+        # mais trainer.py appelle model.set_epoch(epoch) sans garde hasattr() -- cette méthode
+        # doit donc exister pour éviter un AttributeError.
+        pass
 
     def forward(self, x_enc: torch.Tensor) -> torch.Tensor:
         # x_mark_enc=None gere nativement par DataEmbedding_inverted (cf. Embed.py)
@@ -105,7 +113,13 @@ class Model(nn.Module):
         y_past = linear_interpolate_masked(y_past, mask_past).unsqueeze(-1)
 
         # x_enc : target en DERNIERE colonne, cf. convention officielle 'features=MS'
-        x_enc = torch.cat([mask_past, exog_past, y_past], dim=-1)  # [B, lookback, exog_dim+1]
+        if self.include_mask_channel:
+            # enc_in attendu = exog_dim + 1 (cible) + 1 (masque)
+            x_enc = torch.cat([mask_past, exog_past, y_past], dim=-1)
+        else:
+            # enc_in attendu = exog_dim + 1 (cible), SANS masque
+            # -> architecture strictement identique à celle du papier TimeXer (enc_in=3 sur EPF)
+            x_enc = torch.cat([exog_past, y_past], dim=-1)
 
         pred_future = self(x_enc)  # [B, horizon, 1] -- deja au bon format
 

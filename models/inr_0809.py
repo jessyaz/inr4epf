@@ -17,10 +17,10 @@ class INR(nn.Module):
 
         dims = [fourier_dim] + [cfg.hidden_dim] * cfg.num_layers
         self.layers = nn.ModuleList([
-            nn.Linear(dims[i], dims[i + 1], bias=True)
+            nn.Linear(dims[i], dims[i + 1], bias=False)
             for i in range(cfg.num_layers)
         ])
-        self.output_layer = nn.Linear(cfg.hidden_dim, cfg.output_dim, bias=True)
+        self.output_layer = nn.Linear(cfg.hidden_dim, cfg.output_dim, bias=False)
 
     def set_epoch(self, epoch):
         self.fourier.set_epoch(epoch)

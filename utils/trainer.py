@@ -12,10 +12,9 @@ def train(model, loaders, optimizer, device, logger):
     loss_dict = {'MSE': 0.0}
 
     patience = 20
-    grad_clip_norm = model.cfg.grad_clip_norm
 
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode="min", patience=5, factor=0.5
+        optimizer, mode="min", factor=0.7, patience=5, cooldown=3, min_lr=1e-6
     )
 
     lookback = model.cfg.lookback
@@ -31,6 +30,7 @@ def train(model, loaders, optimizer, device, logger):
 
     for epoch in range(num_epochs):
         model.train()
+
         if hasattr(model, "set_epoch"):
             model.set_epoch(epoch)
 
@@ -57,8 +57,7 @@ def train(model, loaders, optimizer, device, logger):
             squared_error = (pred_future - target_future) ** 2
             loss_future = (squared_error * mask_future_expanded).sum() / mask_future_expanded.sum().clamp(min=1.0)
 
-            #squared_error = (pred_future - target_future) ** 2
-            #loss_future = squared_error.mean()
+
 
 
             loss = loss_future
@@ -66,8 +65,6 @@ def train(model, loaders, optimizer, device, logger):
             if loss.requires_grad:
                 optimizer.zero_grad()
                 loss.backward()
-             #   if grad_clip_norm is not None:
-            #        torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
                 optimizer.step()
 
             loss_dict['MSE'] += loss.item()
